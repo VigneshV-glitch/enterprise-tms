@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise TMS",
+  "description": "Enterprise Transportation Management System featuring modular feature-based architecture, Supabase integration layer, TanStack Table & Query, and Supabase-inspired design tokens.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
