@@ -973,6 +973,7 @@ export function DataTable<TData, TValue>({
                     const isPinned = cell.column.getIsPinned() === 'left';
                     const leftOffset = isPinned ? getLeftOffset(cell.column.id) : undefined;
                     const lastPinned = isPinned && isLastPinned(cell.column.id);
+                    const isActionsCol = cell.column.id === 'actions';
 
                     return (
                       <td
@@ -982,7 +983,8 @@ export function DataTable<TData, TValue>({
                           row.getIsSelected() && "bg-[#f5f8ff] dark:bg-[#151c2e] group-hover:bg-[#ebf2ff] dark:group-hover:bg-[#1a2542]",
                           isPinned && "sticky z-10",
                           "after:content-[''] after:absolute after:top-0 after:bottom-0 after:left-full after:w-[5px] after:bg-gradient-to-r after:from-black/25 dark:after:from-black/60 after:to-transparent after:pointer-events-none after:z-30 transition-opacity duration-75",
-                          lastPinned && isScrolled ? "after:opacity-100" : "after:opacity-0"
+                          lastPinned && isScrolled ? "after:opacity-100" : "after:opacity-0",
+                          isActionsCol && "[&_button]:!h-6 [&_button]:!w-6 [&_button]:p-0 [&_button]:flex [&_button]:items-center [&_button]:justify-center [&_button]:rounded-md [&_button]:transition-all [&_button]:text-slate-500 [&_button]:dark:text-slate-400 [&_button]:hover:text-blue-600 [&_button]:dark:hover:text-blue-400 [&_button]:hover:bg-blue-50/70 [&_button]:dark:hover:bg-blue-950/40"
                         )}
                         style={isPinned ? { left: `${leftOffset}px` } : undefined}
                       >
