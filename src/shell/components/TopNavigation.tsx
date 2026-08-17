@@ -113,6 +113,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ onQuickAction, onO
           <span className="text-[9px] font-mono font-bold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.2 rounded border border-blue-200 dark:border-blue-500/20">
             ENTERPRISE
           </span>
+          <span className="text-[9px] font-mono font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-500/20 flex items-center gap-1">
+            <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+            LIVE
+          </span>
         </div>
 
         <span className="text-slate-300 dark:text-slate-700 font-mono">/</span>
