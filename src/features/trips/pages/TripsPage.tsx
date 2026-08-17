@@ -9,11 +9,15 @@ import { Drawer } from '../../../components/common/Drawer';
 import { Input } from '../../../components/common/Input';
 import { Select } from '../../../components/common/Select';
 import { tripsService } from '../../../services/tripsService';
-import { Trip, StatusType } from '../../../types';
+import { vehiclesService } from '../../../services/vehiclesService';
+import { driversService } from '../../../services/driversService';
+import { Trip, StatusType, Vehicle, Driver } from '../../../types';
 import { formatCurrency, formatDate, formatNumber, cn } from '../../../lib/utils';
 
 export const TripsPage: React.FC = () => {
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
@@ -28,12 +32,20 @@ export const TripsPage: React.FC = () => {
   const [costUSD, setCostUSD] = useState('3500');
   const [status, setStatus] = useState<StatusType>('pending');
   const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>('Medium');
+  const [vehicleId, setVehicleId] = useState('');
+  const [driverId, setDriverId] = useState('');
 
   const fetchTrips = async () => {
     setIsLoading(true);
     try {
-      const data = await tripsService.getTrips();
-      setTrips(data);
+      const [tripsData, vehiclesData, driversData] = await Promise.all([
+        tripsService.getTrips(),
+        vehiclesService.getVehicles(),
+        driversService.getDrivers(),
+      ]);
+      setTrips(tripsData);
+      setVehicles(vehiclesData);
+      setDrivers(driversData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -57,6 +69,8 @@ export const TripsPage: React.FC = () => {
       setCostUSD(String(trip.totalCostUSD));
       setStatus(trip.status);
       setPriority(trip.priority);
+      setVehicleId(trip.vehicleId || '');
+      setDriverId(trip.driverId || '');
     } else {
       setSelectedTrip(null);
       setTripCode(`SHIP-${Math.floor(1000 + Math.random() * 9000)}`);
@@ -68,6 +82,8 @@ export const TripsPage: React.FC = () => {
       setCostUSD('3500');
       setStatus('pending');
       setPriority('Medium');
+      setVehicleId('');
+      setDriverId('');
     }
     setIsDrawerOpen(true);
   };
@@ -75,6 +91,46 @@ export const TripsPage: React.FC = () => {
   const handleSaveTrip = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const selectedVehicleObj = vehicles.find(v => v.id === vehicleId);
+      const selectedDriverObj = drivers.find(d => d.id === driverId);
+
+      // Business validation rules
+      if (status === 'in_transit' || status === 'pending') {
+        if (vehicleId) {
+          const matchedVeh = vehicles.find(v => v.id === vehicleId);
+          if (matchedVeh) {
+            // Check maintenance
+            if (matchedVeh.status === 'maintenance') {
+              alert(`Error: Vehicle ${matchedVeh.unitNumber} is in maintenance and cannot be dispatched.`);
+              return;
+            }
+            // Check conflict
+            const isVehicleConflict = trips.some(t => t.id !== selectedTrip?.id && t.vehicleId === vehicleId && (t.status === 'in_transit' || t.status === 'delayed'));
+            if (isVehicleConflict) {
+              alert(`Error: Vehicle ${matchedVeh.unitNumber} is already assigned to another active trip.`);
+              return;
+            }
+          }
+        }
+
+        if (driverId) {
+          const matchedDrv = drivers.find(d => d.id === driverId);
+          if (matchedDrv) {
+            // Check off-duty
+            if (matchedDrv.status === 'off_duty') {
+              alert(`Error: Driver ${matchedDrv.fullName} is off duty and cannot be dispatched.`);
+              return;
+            }
+            // Check conflict
+            const isDriverConflict = trips.some(t => t.id !== selectedTrip?.id && t.driverId === driverId && (t.status === 'in_transit' || t.status === 'delayed'));
+            if (isDriverConflict) {
+              alert(`Error: Driver ${matchedDrv.fullName} is already assigned to another active trip.`);
+              return;
+            }
+          }
+        }
+      }
+
       if (selectedTrip) {
         await tripsService.updateTrip(selectedTrip.id, {
           tripCode,
@@ -86,7 +142,19 @@ export const TripsPage: React.FC = () => {
           totalCostUSD: Number(costUSD),
           status,
           priority,
+          vehicleId: vehicleId || undefined,
+          vehicleUnit: selectedVehicleObj ? selectedVehicleObj.unitNumber : undefined,
+          driverId: driverId || undefined,
+          driverName: selectedDriverObj ? selectedDriverObj.fullName : undefined,
         });
+
+        // Persist status or assignment to driver/vehicle if necessary
+        if (selectedVehicleObj && status === 'in_transit') {
+          await vehiclesService.updateVehicle(selectedVehicleObj.id, { status: 'in_transit' });
+        }
+        if (selectedDriverObj && status === 'in_transit') {
+          await driversService.updateDriver(selectedDriverObj.id, { status: 'in_transit' });
+        }
       } else {
         await tripsService.createTrip({
           tripCode,
@@ -101,6 +169,10 @@ export const TripsPage: React.FC = () => {
           scheduledDeparture: new Date().toISOString(),
           estimatedArrival: new Date(Date.now() + 86400000 * 2).toISOString(),
           routeDistanceMiles: 750,
+          vehicleId: vehicleId || undefined,
+          vehicleUnit: selectedVehicleObj ? selectedVehicleObj.unitNumber : undefined,
+          driverId: driverId || undefined,
+          driverName: selectedDriverObj ? selectedDriverObj.fullName : undefined,
         });
       }
       setIsDrawerOpen(false);
@@ -332,6 +404,32 @@ export const TripsPage: React.FC = () => {
                 { value: 'Medium', label: 'Medium' },
                 { value: 'High', label: 'High' },
                 { value: 'Critical', label: 'Critical' },
+              ]}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3 border-t border-[#1e2638] pt-3 mt-3">
+            <Select
+              label="Assign Vehicle"
+              value={vehicleId}
+              onChange={(e) => setVehicleId(e.target.value)}
+              options={[
+                { value: '', label: 'Unassigned' },
+                ...vehicles.map(v => ({
+                  value: v.id,
+                  label: `${v.unitNumber} (${v.make} - Status: ${v.status})`
+                }))
+              ]}
+            />
+            <Select
+              label="Assign Driver"
+              value={driverId}
+              onChange={(e) => setDriverId(e.target.value)}
+              options={[
+                { value: '', label: 'Unassigned' },
+                ...drivers.map(d => ({
+                  value: d.id,
+                  label: `${d.fullName} (Safety: ${d.safetyScore}% - Status: ${d.status})`
+                }))
               ]}
             />
           </div>

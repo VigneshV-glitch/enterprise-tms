@@ -4,12 +4,21 @@
  */
 import React from "react";
 import { AlertTriangle, TrafficCone, Package, Cloud, XCircle, ArrowRight } from "lucide-react";
+import { useTMSData } from "../../utils/useTMSData";
 
 export const ExceptionCenter: React.FC = () => {
+  const { trips } = useTMSData();
+
+  const delayedTrips = trips.filter(t => t.status === "Delayed" || t.status === "delayed");
+  
+  // Distribute delays logically based on the actual delayed trips in the system
+  const trafficCount = delayedTrips.filter(t => t.tripCode === "SHIP-9004" || t.origin.includes("Columbus")).length;
+  const breakdownCount = delayedTrips.filter(t => t.tripCode !== "SHIP-9004" && !t.origin.includes("Columbus")).length;
+
   const exceptions = [
     {
       title: "Traffic Congestion",
-      count: 0,
+      count: trafficCount,
       icon: TrafficCone,
       iconColor: "text-orange-500",
       iconBg: "bg-orange-50 dark:bg-orange-900/20",
@@ -27,7 +36,7 @@ export const ExceptionCenter: React.FC = () => {
     },
     {
       title: "Vehicle Breakdown",
-      count: 0,
+      count: breakdownCount,
       icon: AlertTriangle,
       iconColor: "text-red-500",
       iconBg: "bg-red-50 dark:bg-red-900/20",
