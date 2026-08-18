@@ -348,6 +348,25 @@ export const TripsPage: React.FC = () => {
         onRefresh={fetchTrips}
         onBulkDelete={handleBulkDelete}
         onInsertRow={() => handleOpenDrawer()}
+        onImportRows={async (rows) => {
+          for (const row of rows) {
+            await tripsService.createTrip({
+              tripCode: row.tripCode || row['Trip ID'] || row['tripCode'] || `SHIP-${Math.floor(1000 + Math.random() * 9000)}`,
+              customerName: row.customerName || row.customer || row['Customer'] || row['customerName'] || 'Apex Logistics Hub',
+              origin: row.origin || row['Origin'] || row['origin'] || 'Chicago Hub',
+              destination: row.destination || row['Destination'] || row['destination'] || 'Dallas Port',
+              cargoDescription: row.cargoDescription || row['Cargo Description'] || row['cargoDescription'] || 'General Freight',
+              weightKg: Number(row.weightKg || row['Cargo Weight'] || row['weightKg'] || 14000),
+              totalCostUSD: Number(row.totalCostUSD || row['Total Cost'] || row['cost'] || row['totalCostUSD'] || 3200),
+              status: (row.status || row['Status'] || 'pending').toLowerCase().replace(' ', '_') as any,
+              priority: row.priority || row['Priority'] || 'Medium',
+              scheduledDeparture: new Date().toISOString(),
+              estimatedArrival: new Date(Date.now() + 86400000 * 2).toISOString(),
+              routeDistanceMiles: 800,
+            });
+          }
+          await fetchTrips();
+        }}
         searchPlaceholder="Filter by Conditions..."
       />
 

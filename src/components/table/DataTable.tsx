@@ -35,7 +35,9 @@ import {
   Pin,
 } from 'lucide-react';
 import { Button } from '../common/Button';
+import { Drawer } from '../common/Drawer';
 import { cn } from '../../lib/utils';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 
 export interface FilterChip {
   id: string;
@@ -222,6 +224,7 @@ export interface DataTableProps<TData, TValue> {
   onBulkDelete?: (selectedRows: TData[]) => void;
   onExport?: (data: TData[]) => void;
   onInsertRow?: () => void;
+  onImportRows?: (data: any[]) => Promise<void>;
   searchPlaceholder?: string;
   columnTypes?: Record<string, string>;
 }
@@ -235,28 +238,120 @@ export function DataTable<TData, TValue>({
   onBulkDelete,
   onExport,
   onInsertRow,
+  onImportRows,
   searchPlaceholder = 'Filter by Conditions...',
   columnTypes = {},
 }: DataTableProps<TData, TValue>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const { preferences, updateTablePreference } = useUserPreferences();
+  const savedPref = preferences.tablePreferences[tableName];
+
+  const [sorting, setSorting] = useState<SortingState>(() => savedPref?.sorting || []);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    if (!savedPref?.columnVisibility) return {};
+    const validVisibility: VisibilityState = {};
+    const validColIds = columns.map(c => (c as any).accessorKey || c.id || (typeof (c as any).header === 'string' ? (c as any).header : '')).filter(Boolean);
+    Object.keys(savedPref.columnVisibility).forEach(key => {
+      if (validColIds.includes(key)) {
+        validVisibility[key] = savedPref.columnVisibility[key];
+      }
+    });
+    return validVisibility;
+  });
   const [rowSelection, setRowSelection] = useState({});
   const [globalFilter, setGlobalFilter] = useState('');
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
+  // CSV Import State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importHeaders, setImportHeaders] = useState<string[]>([]);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+
+  const handleCSVUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportError(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) throw new Error("Empty CSV file.");
+        
+        const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
+        if (lines.length < 2) throw new Error("CSV file must contain at least a header row and one data row.");
+
+        const headers = lines[0].split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+        setImportHeaders(headers);
+
+        const parsedRows = lines.slice(1).map((line, lineIndex) => {
+          const values: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              values.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          values.push(current.trim());
+
+          const rowObj: Record<string, any> = {};
+          headers.forEach((h, idx) => {
+            let val = values[idx] || '';
+            val = val.replace(/^["']|["']$/g, '').trim();
+            rowObj[h] = val;
+          });
+          return { id: `row-${lineIndex}`, ...rowObj };
+        });
+
+        setImportRows(parsedRows);
+      } catch (err: any) {
+        setImportError(err?.message || "Failed to parse CSV file.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!onImportRows || importRows.length === 0) return;
+    setIsImporting(true);
+    try {
+      const cleanRows = importRows.map(({ id, ...rest }) => rest);
+      await onImportRows(cleanRows);
+      setShowImportModal(false);
+      setImportFile(null);
+      setImportRows([]);
+      setImportHeaders([]);
+      if (onRefresh) onRefresh();
+    } catch (err: any) {
+      setImportError(err?.message || "Failed to import rows.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // Condition Builder Filter State
-  const [filterChips, setFilterChips] = useState<FilterChip[]>([]);
+  const [filterChips, setFilterChips] = useState<FilterChip[]>(() => savedPref?.filterChips || []);
   const [activePopover, setActivePopover] = useState<{
     type: 'column' | 'condition';
     chipId?: string | null;
     rect: { top: number; bottom: number; left: number; right: number; width: number };
   } | null>(null);
 
-  const [pagination, setPagination] = useState({
+  const [pagination, setPagination] = useState(() => ({
     pageIndex: 0,
-    pageSize: 50,
-  });
+    pageSize: savedPref?.pagination?.pageSize || 50,
+  }));
 
   const filteredData = React.useMemo(() => {
     if (filterChips.length === 0 && !globalFilter) return data;
@@ -293,9 +388,12 @@ export function DataTable<TData, TValue>({
     });
   }, [data, filterChips, globalFilter]);
 
-  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>({
-    left: [],
-    right: [],
+  const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(() => {
+    if (!savedPref?.columnPinning) return { left: [], right: [] };
+    const validColIds = columns.map(c => (c as any).accessorKey || c.id || (typeof (c as any).header === 'string' ? (c as any).header : '')).filter(Boolean);
+    const left = (savedPref.columnPinning.left || []).filter(id => validColIds.includes(id));
+    const right = (savedPref.columnPinning.right || []).filter(id => validColIds.includes(id));
+    return { left, right };
   });
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [selectColumnWidth, setSelectColumnWidth] = useState(40);
@@ -304,6 +402,65 @@ export function DataTable<TData, TValue>({
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     setIsScrolled(e.currentTarget.scrollLeft > 0);
   };
+
+  // Synchronize state changes to userPreferences
+  useEffect(() => {
+    updateTablePreference(tableName, { sorting });
+  }, [sorting, tableName]);
+
+  useEffect(() => {
+    updateTablePreference(tableName, { columnVisibility });
+  }, [columnVisibility, tableName]);
+
+  useEffect(() => {
+    updateTablePreference(tableName, { columnPinning });
+  }, [columnPinning, tableName]);
+
+  useEffect(() => {
+    updateTablePreference(tableName, { pagination: { pageSize: pagination.pageSize } });
+  }, [pagination.pageSize, tableName]);
+
+  useEffect(() => {
+    updateTablePreference(tableName, { filterChips });
+  }, [filterChips, tableName]);
+
+  // Sync state from preferences if they are reset or changed externally
+  useEffect(() => {
+    const freshPref = preferences.tablePreferences[tableName];
+    if (freshPref) {
+      if (freshPref.sorting && JSON.stringify(freshPref.sorting) !== JSON.stringify(sorting)) {
+        setSorting(freshPref.sorting);
+      }
+      if (freshPref.columnVisibility && JSON.stringify(freshPref.columnVisibility) !== JSON.stringify(columnVisibility)) {
+        const validVisibility: VisibilityState = {};
+        const validColIds = columns.map(c => (c as any).accessorKey || c.id || (typeof (c as any).header === 'string' ? (c as any).header : '')).filter(Boolean);
+        Object.keys(freshPref.columnVisibility).forEach(key => {
+          if (validColIds.includes(key)) {
+            validVisibility[key] = freshPref.columnVisibility[key];
+          }
+        });
+        setColumnVisibility(validVisibility);
+      }
+      if (freshPref.columnPinning && JSON.stringify(freshPref.columnPinning) !== JSON.stringify(columnPinning)) {
+        const validColIds = columns.map(c => (c as any).accessorKey || c.id || (typeof (c as any).header === 'string' ? (c as any).header : '')).filter(Boolean);
+        const left = (freshPref.columnPinning.left || []).filter(id => validColIds.includes(id));
+        const right = (freshPref.columnPinning.right || []).filter(id => validColIds.includes(id));
+        setColumnPinning({ left, right });
+      }
+      if (freshPref.pagination && freshPref.pagination.pageSize !== pagination.pageSize) {
+        setPagination(prev => ({ ...prev, pageSize: freshPref.pagination.pageSize }));
+      }
+      if (freshPref.filterChips && JSON.stringify(freshPref.filterChips) !== JSON.stringify(filterChips)) {
+        setFilterChips(freshPref.filterChips);
+      }
+    } else {
+      if (sorting.length > 0) setSorting([]);
+      if (Object.keys(columnVisibility).length > 0) setColumnVisibility({});
+      if ((columnPinning.left && columnPinning.left.length > 0) || (columnPinning.right && columnPinning.right.length > 0)) setColumnPinning({ left: [], right: [] });
+      if (pagination.pageSize !== 50) setPagination({ pageIndex: 0, pageSize: 50 });
+      if (filterChips.length > 0) setFilterChips([]);
+    }
+  }, [preferences, tableName, columns]);
 
   const table = useReactTable({
     data: filteredData,
@@ -807,18 +964,40 @@ export function DataTable<TData, TValue>({
                     </div>
                   </div>
                 </div>
+
+                {/* Reset to Defaults Footer */}
+                <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-[#2b3548] flex items-center justify-between text-[11px] shrink-0">
+                  <span className="text-slate-400 dark:text-slate-500">Customized layout</span>
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      await updateTablePreference(tableName, {
+                        sorting: [],
+                        columnVisibility: {},
+                        columnPinning: { left: [], right: [] },
+                        pagination: { pageSize: 50 },
+                        filterChips: [],
+                      });
+                      setShowColumnDropdown(false);
+                    }}
+                    className="text-blue-500 hover:text-blue-400 font-semibold hover:underline"
+                  >
+                    Reset to Defaults
+                  </button>
+                </div>
               </div>
               </>
             )}
           </div>
 
-          {(onInsertRow || onExport) && (
+          {onImportRows && (
             <button
-              onClick={onInsertRow || onExport}
-              className="flex items-center gap-1 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-md transition-colors shadow-xs"
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-md transition-colors shadow-xs text-xs shrink-0"
             >
-              <Upload className="h-3.5 w-3.5" />
-              <span>Import</span>
+              <Upload className="h-3.5 w-3.5 text-white" />
+              <span>Import CSV</span>
             </button>
           )}
         </div>
@@ -1073,8 +1252,121 @@ export function DataTable<TData, TValue>({
           <span>{data.length} total records</span>
         </div>
 
-
       </div>
+
+      {/* CSV Import Drawer (Off-Canvas) */}
+      <Drawer
+        isOpen={showImportModal}
+        onClose={() => {
+          setShowImportModal(false);
+          setImportFile(null);
+          setImportRows([]);
+        }}
+        title="Import Data via CSV File"
+        description={`Parse, preview, and upload bulk structured spreadsheet records into ${tableName || 'dataset'}.`}
+        width="lg"
+        footer={
+          <>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowImportModal(false);
+                setImportFile(null);
+                setImportRows([]);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleConfirmImport}
+              disabled={!importFile || importRows.length === 0 || isImporting}
+              isLoading={isImporting}
+            >
+              Confirm & Import Records
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4 text-xs select-text">
+          {importError && (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-md font-medium">
+              {importError}
+            </div>
+          )}
+
+          {/* Upload Drop Zone */}
+          {!importFile ? (
+            <div className="border-2 border-dashed border-slate-300 dark:border-[#2b3548] rounded-xl p-8 flex flex-col items-center justify-center text-center hover:border-blue-500 dark:hover:border-blue-500/50 bg-slate-50/50 dark:bg-[#141822]/40 transition-colors relative">
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleCSVUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center mb-3">
+                <Upload className="h-5 w-5 text-blue-500" />
+              </div>
+              <p className="font-semibold text-slate-900 dark:text-slate-200">Select a CSV file to upload</p>
+              <p className="text-[11px] text-slate-400 mt-1">Accepts standard comma-separated spreadsheets (.csv)</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* File Info */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-[#181e2a] border border-slate-200 dark:border-[#242f44] rounded-lg">
+                <div className="flex items-center gap-2.5">
+                  <FileSpreadsheet className="h-5 w-5 text-emerald-500" />
+                  <div>
+                    <p className="font-semibold text-slate-900 dark:text-slate-200">{importFile.name}</p>
+                    <p className="text-[10px] text-slate-400 font-mono">{(importFile.size / 1024).toFixed(1)} KB • {importRows.length} Rows Detected</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setImportFile(null);
+                    setImportRows([]);
+                    setImportHeaders([]);
+                    setImportError(null);
+                  }}
+                  className="text-xs text-rose-500 hover:underline font-medium"
+                >
+                  Choose different file
+                </button>
+              </div>
+
+              {/* Preview Table */}
+              <div className="space-y-1.5">
+                <p className="font-bold text-[10px] text-slate-400 uppercase tracking-wider font-mono">Parsed Records Preview</p>
+                <div className="border border-slate-200 dark:border-[#1e2638] rounded-lg overflow-hidden max-h-60 overflow-y-auto no-scrollbar">
+                  <table className="w-full text-left border-collapse text-[11px]">
+                    <thead className="bg-slate-50 dark:bg-[#181e2b] border-b border-slate-200 dark:border-[#1e2638] sticky top-0 z-10">
+                      <tr>
+                        {importHeaders.slice(0, 6).map((h) => (
+                          <th key={h} className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-300 capitalize">{h.replace(/([A-Z])/g, ' $1')}</th>
+                        ))}
+                        {importHeaders.length > 6 && <th className="px-3 py-2 font-semibold text-slate-400">+{importHeaders.length - 6} more</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-[#1e2638] bg-white dark:bg-[#121620]">
+                      {importRows.slice(0, 5).map((row) => (
+                        <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-[#151b27]">
+                          {importHeaders.slice(0, 6).map((h) => (
+                            <td key={h} className="px-3 py-1.5 text-slate-600 dark:text-slate-300 font-mono truncate max-w-[150px]">{row[h]}</td>
+                          ))}
+                          {importHeaders.length > 6 && <td className="px-3 py-1.5 text-slate-400">...</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {importRows.length > 5 && (
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">Showing first 5 rows of {importRows.length} total rows.</p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </Drawer>
     </div>
     </div>
   );

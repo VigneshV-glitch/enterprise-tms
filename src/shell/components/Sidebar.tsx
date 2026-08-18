@@ -6,9 +6,14 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { NAV_GROUPS } from '../navigation/navigation.config';
+import { useUserPreferences } from '../../hooks/useUserPreferences';
 
 export const Sidebar: React.FC = () => {
-  const [isCollapsed, setIsCollapsed] = useState(true);
+  const { preferences, updateNavigationPreference } = useUserPreferences();
+  const isCollapsed = preferences.navigationPreferences.sidebarCollapsed;
+  const setIsCollapsed = (collapsed: boolean) => {
+    updateNavigationPreference({ sidebarCollapsed: collapsed });
+  };
   const [isHovered, setIsHovered] = useState(false);
 
   // Expanded if either pinned open (!isCollapsed) OR hovered while collapsed

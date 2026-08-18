@@ -100,6 +100,22 @@ export const LocationsPage: React.FC = () => {
         isLoading={isLoading}
         tableName="public.locations"
         onRefresh={fetchHubs}
+        onImportRows={async (rows) => {
+          for (const row of rows) {
+            await locationsRepository.create({
+              code: row.code || row['Hub Code'] || row['code'] || `HUB-${Math.floor(100 + Math.random() * 900)}`,
+              name: row.name || row['Terminal Name'] || row['name'] || 'New Terminal Hub',
+              type: row.type || row['Facility Type'] || row['type'] || 'Distribution Center',
+              city: row.city || row['City'] || 'Chicago',
+              state: row.state || row['State'] || 'IL',
+              currentCapacityPercent: Number(row.currentCapacityPercent || row['Capacity Used'] || 50),
+              totalDocks: Number(row.totalDocks || 10),
+              availableDocks: Number(row.availableDocks || 5),
+              status: (row.status || row['Status'] || 'available').toLowerCase() as any,
+            });
+          }
+          await fetchHubs();
+        }}
         searchPlaceholder="Filter by id, code, name... or ask AI"
       />
     </div>

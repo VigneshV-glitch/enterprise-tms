@@ -61,9 +61,18 @@ const line7DData = [
   { name: 'Sun', value: 95 },
 ];
 
+import { useUserPreferences } from "../../hooks/useUserPreferences";
+
 export const ChartsSection: React.FC = () => {
-  const [barPeriod, setBarPeriod] = useState("Week");
-  const [linePeriod, setLinePeriod] = useState("7D");
+  const { preferences, updateDashboardPreference } = useUserPreferences();
+  const barPeriod = preferences.dashboardPreferences.barPeriod;
+  const setBarPeriod = (p: string) => {
+    updateDashboardPreference({ barPeriod: p });
+  };
+  const linePeriod = preferences.dashboardPreferences.linePeriod;
+  const setLinePeriod = (p: string) => {
+    updateDashboardPreference({ linePeriod: p });
+  };
 
   const getFilteredBarData = () => {
     if (barPeriod === "Month") {

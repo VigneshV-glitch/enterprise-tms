@@ -20,9 +20,15 @@ import {
   Activity
 } from "lucide-react";
 
+import { useUserPreferences } from "../../hooks/useUserPreferences";
+
 export const KPICards: React.FC = () => {
   const { trips, vehicles, drivers } = useTMSData();
-  const [activeTab, setActiveTab] = useState<"Overview" | "Trips" | "Fleet" | "Drivers" | "Cargo" | "Facilities">("Overview");
+  const { preferences, updateDashboardPreference } = useUserPreferences();
+  const activeTab = preferences.dashboardPreferences.activeTab;
+  const setActiveTab = (tab: "Overview" | "Trips" | "Fleet" | "Drivers" | "Cargo" | "Facilities") => {
+    updateDashboardPreference({ activeTab: tab });
+  };
 
   // Computed metrics per tab
   const getMetricsForTab = () => {

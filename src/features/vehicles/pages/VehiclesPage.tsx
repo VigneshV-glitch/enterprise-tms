@@ -214,6 +214,26 @@ export const VehiclesPage: React.FC = () => {
         onRefresh={fetchVehicles}
         onBulkDelete={handleBulkDelete}
         onInsertRow={() => handleOpenDrawer()}
+        onImportRows={async (rows) => {
+          for (const row of rows) {
+            await vehiclesService.createVehicle({
+              unitNumber: row.unitNumber || row['Unit Number'] || row['unitNumber'] || `TRK-${Math.floor(8000 + Math.random() * 1000)}`,
+              vin: row.vin || row['VIN Code'] || row['vin'] || '1XKDDB9X3MD' + Math.floor(100000 + Math.random() * 900000),
+              make: row.make || row['Manufacturer Make'] || row['make'] || 'Freightliner',
+              model: row.model || row['Model Name'] || row['model'] || 'Cascadia 126',
+              type: (row.type || row['Vehicle Type'] || 'Semi-Truck') as any,
+              status: (row.status || row['Operational Status'] || 'available').toLowerCase() as any,
+              fuelLevelPercent: Number(row.fuelLevelPercent || row['Fuel Level'] || 80),
+              odometerMiles: Number(row.odometerMiles || row['Odometer Miles'] || 100000),
+              currentLocation: row.currentLocation || row['Location'] || 'Chicago Logistics Hub',
+              year: 2024,
+              maxPayloadKg: 22000,
+              lastServiceDate: new Date().toISOString().slice(0, 10),
+              nextServiceDueDate: new Date(Date.now() + 86400000 * 90).toISOString().slice(0, 10),
+            });
+          }
+          await fetchVehicles();
+        }}
         searchPlaceholder="Filter by id, code, name... or ask AI"
       />
 

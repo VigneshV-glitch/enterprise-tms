@@ -179,6 +179,23 @@ export const DriversPage: React.FC = () => {
         tableName="public.drivers"
         onRefresh={fetchDrivers}
         onInsertRow={() => handleOpenDrawer()}
+        onImportRows={async (rows) => {
+          for (const row of rows) {
+            await driversService.createDriver({
+              fullName: row.fullName || row['Driver Name'] || row['fullName'] || 'New Driver',
+              cdlNumber: row.cdlNumber || row['CDL License #'] || row['cdlNumber'] || `CDL-IL-${Math.floor(1000000 + Math.random() * 9000000)}`,
+              licenseClass: (row.licenseClass || row['License Class'] || 'Class A CDL') as any,
+              status: (row.status || row['Status'] || 'available').toLowerCase() as any,
+              safetyScore: Number(row.safetyScore || row['Safety Rating'] || 95),
+              drivingHoursThisWeek: Number(row.drivingHoursThisWeek || row['HOS Hours'] || 0),
+              homeTerminal: row.homeTerminal || row['Home Hub'] || 'Chicago Logistics Hub',
+              email: row.email || `${(row.fullName || 'driver').toLowerCase().replace(' ', '')}@example.com`,
+              phone: row.phone || '+1 (312) 555-0100',
+              certifications: ['HazMat'],
+            });
+          }
+          await fetchDrivers();
+        }}
         searchPlaceholder="Filter by id, code, name... or ask AI"
       />
 
