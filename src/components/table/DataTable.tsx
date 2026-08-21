@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Button } from '../common/Button';
 import { Drawer } from '../common/Drawer';
+import { FilterPanel, FilterCondition } from '../filter';
 import { cn } from '../../lib/utils';
 import { useUserPreferences } from '../../hooks/useUserPreferences';
 
@@ -176,12 +177,78 @@ function evaluateCondition(rowVal: any, condition: string, val1: any, val2: any,
   const strRow = String(rowVal).toLowerCase();
   const strVal1 = String(val1 || '').toLowerCase();
 
+  // Helper for bucket code matching on numeric values
+  const matchRangeBucket = (numVal: number, code: string): boolean => {
+    switch (code) {
+      case 'lt_1000': return numVal < 1000;
+      case '1000_5000': return numVal >= 1000 && numVal <= 5000;
+      case 'gt_5000': return numVal > 5000;
+      case 'lt_2000': return numVal < 2000;
+      case '2000_8000': return numVal >= 2000 && numVal <= 8000;
+      case 'gt_8000': return numVal > 8000;
+      case 'lt_1500': return numVal < 1500;
+      case '1500_4000': return numVal >= 1500 && numVal <= 4000;
+      case 'gt_4000': return numVal > 4000;
+      case 'gt_75': return numVal > 75;
+      case '25_75': return numVal >= 25 && numVal <= 75;
+      case 'lt_25': return numVal < 25;
+      case 'lt_50k': return numVal < 50000;
+      case '50k_150k': return numVal >= 50000 && numVal <= 150000;
+      case 'gt_150k': return numVal > 150000;
+      case '90_100': return numVal >= 90 && numVal <= 100;
+      case '80_89': return numVal >= 80 && numVal <= 89;
+      case 'lt_80': return numVal < 80;
+      case 'lt_20': return numVal < 20;
+      case '20_45': return numVal >= 20 && numVal <= 45;
+      case 'gt_45': return numVal > 45;
+      case 'lt_10': return numVal < 10;
+      case '10_30': return numVal >= 10 && numVal <= 30;
+      case 'gt_30': return numVal > 30;
+      case 'lt_50': return numVal < 50;
+      case '50_150': return numVal >= 50 && numVal <= 150;
+      case 'gt_150': return numVal > 150;
+      default: return false;
+    }
+  };
+
+  // Helper for date presets
+  const matchDatePreset = (dateVal: Date, code: string): boolean => {
+    const now = new Date();
+    const target = new Date(dateVal);
+    if (isNaN(target.getTime())) return false;
+
+    switch (code) {
+      case 'today':
+        return target.toDateString() === now.toDateString();
+      case 'yesterday':
+        const yest = new Date(now);
+        yest.setDate(now.getDate() - 1);
+        return target.toDateString() === yest.toDateString();
+      case 'last_7_days':
+        const d7 = new Date(now);
+        d7.setDate(now.getDate() - 7);
+        return target >= d7 && target <= now;
+      case 'last_30_days':
+        const d30 = new Date(now);
+        d30.setDate(now.getDate() - 30);
+        return target >= d30 && target <= now;
+      case 'this_month':
+        return target.getMonth() === now.getMonth() && target.getFullYear() === now.getFullYear();
+      default:
+        return false;
+    }
+  };
+
   switch (condition) {
     case 'equals':
+      if (typeof rowVal === 'number') {
+        if (matchRangeBucket(rowVal, strVal1)) return true;
+      }
       return strRow === strVal1;
     case 'not_equals':
       return strRow !== strVal1;
     case 'contains':
+      if (typeof rowVal === 'number' && matchRangeBucket(rowVal, strVal1)) return true;
       return strRow.includes(strVal1);
     case 'does_not_contain':
       return !strRow.includes(strVal1);
@@ -205,8 +272,29 @@ function evaluateCondition(rowVal: any, condition: string, val1: any, val2: any,
     case 'after':
       return new Date(rowVal).getTime() > new Date(val1).getTime();
     case 'in':
+    case 'range': {
       const listIn = String(val1).split(',').map((s) => s.trim().toLowerCase());
-      return listIn.includes(strRow);
+      
+      // Try exact string match first
+      if (listIn.includes(strRow)) return true;
+
+      // Try numeric range bucket match
+      if (typeof rowVal === 'number' || !isNaN(Number(rowVal))) {
+        const numVal = Number(rowVal);
+        if (listIn.some((code) => matchRangeBucket(numVal, code))) return true;
+      }
+
+      // Try date preset match
+      if (rowVal) {
+        const dateVal = new Date(rowVal);
+        if (!isNaN(dateVal.getTime())) {
+          if (listIn.some((code) => matchDatePreset(dateVal, code))) return true;
+        }
+      }
+
+      // Partial substring match for flex options e.g. "Chicago" in "Chicago Hub (CHI-01)"
+      return listIn.some((item) => strRow.includes(item) || item.includes(strRow));
+    }
     case 'not_in':
       const listNotIn = String(val1).split(',').map((s) => s.trim().toLowerCase());
       return !listNotIn.includes(strRow);
@@ -342,6 +430,33 @@ export function DataTable<TData, TValue>({
 
   // Condition Builder Filter State
   const [filterChips, setFilterChips] = useState<FilterChip[]>(() => savedPref?.filterChips || []);
+
+  const appliedConditions: FilterCondition[] = React.useMemo(() => {
+    return filterChips.map((chip) => ({
+      id: chip.id,
+      fieldId: chip.columnId,
+      fieldLabel: chip.columnName,
+      fieldType: (chip.columnType as any) || 'text',
+      operator: (chip.condition as any) || 'equals',
+      value: chip.value,
+      value2: chip.value2,
+      logicalOperator: chip.logicalOperator,
+    }));
+  }, [filterChips]);
+
+  const handleApplyFilterConditions = (conditions: FilterCondition[]) => {
+    const newChips: FilterChip[] = conditions.map((cond) => ({
+      id: cond.id,
+      columnId: cond.fieldId,
+      columnName: cond.fieldLabel,
+      columnType: cond.fieldType,
+      condition: cond.operator,
+      value: cond.value,
+      value2: cond.value2,
+      logicalOperator: cond.logicalOperator,
+    }));
+    setFilterChips(newChips);
+  };
   const [activePopover, setActivePopover] = useState<{
     type: 'column' | 'condition';
     chipId?: string | null;
@@ -597,9 +712,13 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-row flex-1 h-full w-full min-h-0">
-      {/* Empty spacer/sidebar div: width around 180px */}
-      <div 
-        className="w-[190px] shrink-0 h-full border-t border-r border-slate-200 dark:border-[#21262d] bg-white dark:bg-[#171717] hidden md:block" 
+      {/* Common Shared Dynamic Filter Panel */}
+      <FilterPanel
+        tableName={tableName}
+        appliedConditions={appliedConditions}
+        onApplyFilters={handleApplyFilterConditions}
+        onClearFilters={() => setFilterChips([])}
+        className="hidden md:flex"
       />
 
       {/* Actual Table Component */}

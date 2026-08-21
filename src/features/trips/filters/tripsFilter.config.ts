@@ -1,0 +1,120 @@
+import { FilterConfig } from '../../../components/filter/filter.types';
+
+export const tripsFilterConfig: FilterConfig = {
+  pageId: 'trips',
+  title: 'Trip Filters',
+  fields: [
+    {
+      id: 'status',
+      label: 'Trip Status',
+      type: 'status',
+      operators: ['in', 'equals'],
+      options: [
+        { label: 'In Transit', value: 'in_transit' },
+        { label: 'Delayed', value: 'delayed' },
+        { label: 'Pending', value: 'pending' },
+        { label: 'Completed', value: 'completed' },
+        { label: 'Cancelled', value: 'cancelled' },
+      ],
+    },
+    {
+      id: 'priority',
+      label: 'Priority Level',
+      type: 'select',
+      operators: ['in', 'equals'],
+      options: [
+        { label: 'Critical', value: 'Critical' },
+        { label: 'High', value: 'High' },
+        { label: 'Medium', value: 'Medium' },
+        { label: 'Low', value: 'Low' },
+      ],
+    },
+    {
+      id: 'customerName',
+      label: 'Customer',
+      type: 'select',
+      operators: ['in', 'contains'],
+      options: [
+        { label: 'Acme Freight Inc.', value: 'Acme Freight Inc.' },
+        { label: 'Global Trade Co.', value: 'Global Trade Co.' },
+        { label: 'Pacific Logistics', value: 'Pacific Logistics' },
+        { label: 'Apex Supply Chain', value: 'Apex Supply Chain' },
+        { label: 'Metro Retailers', value: 'Metro Retailers' },
+      ],
+    },
+    {
+      id: 'vehicleUnit',
+      label: 'Assigned Vehicle',
+      type: 'relationship',
+      operators: ['in', 'equals'],
+      options: [
+        { label: 'TRK-8012 (Semi)', value: 'TRK-8012' },
+        { label: 'TRK-8015 (Reefer)', value: 'TRK-8015' },
+        { label: 'TRK-9020 (Flatbed)', value: 'TRK-9020' },
+        { label: 'TRK-7710 (Box)', value: 'TRK-7710' },
+        { label: 'TRK-6501 (Sprinter)', value: 'TRK-6501' },
+      ],
+    },
+    {
+      id: 'driverName',
+      label: 'Assigned Driver',
+      type: 'relationship',
+      operators: ['in', 'equals'],
+      options: [
+        { label: 'John Doe', value: 'John Doe' },
+        { label: 'Sarah Jenkins', value: 'Sarah Jenkins' },
+        { label: 'Marcus Vance', value: 'Marcus Vance' },
+        { label: 'Robert Chen', value: 'Robert Chen' },
+        { label: 'Emily Davis', value: 'Emily Davis' },
+      ],
+    },
+    {
+      id: 'origin',
+      label: 'Origin Hub',
+      type: 'select',
+      operators: ['in', 'contains'],
+      options: [
+        { label: 'Chicago Hub (CHI-01)', value: 'Chicago' },
+        { label: 'Dallas Port (DAL-02)', value: 'Dallas' },
+        { label: 'Seattle Terminal (SEA-03)', value: 'Seattle' },
+        { label: 'Atlanta Yard (ATL-04)', value: 'Atlanta' },
+        { label: 'Los Angeles Port (LAX-05)', value: 'Los Angeles' },
+      ],
+    },
+    {
+      id: 'destination',
+      label: 'Destination',
+      type: 'select',
+      operators: ['in', 'contains'],
+      options: [
+        { label: 'New York Dock (NY-01)', value: 'New York' },
+        { label: 'Miami Terminal (MIA-02)', value: 'Miami' },
+        { label: 'San Francisco Port (SFO-03)', value: 'San Francisco' },
+        { label: 'Houston Hub (HOU-04)', value: 'Houston' },
+        { label: 'Phoenix Terminal (PHX-05)', value: 'Phoenix' },
+      ],
+    },
+    {
+      id: 'weightKg',
+      label: 'Cargo Weight Range',
+      type: 'range',
+      operators: ['between', 'less_than', 'greater_than'],
+      options: [
+        { label: 'Light (< 2,000 kg)', value: 'lt_2000' },
+        { label: 'Medium (2,000 - 8,000 kg)', value: '2000_8000' },
+        { label: 'Heavy (> 8,000 kg)', value: 'gt_8000' },
+      ],
+    },
+    {
+      id: 'totalCostUSD',
+      label: 'Total Cost Range',
+      type: 'range',
+      operators: ['between', 'less_than', 'greater_than'],
+      options: [
+        { label: 'Economy (< $1,500)', value: 'lt_1500' },
+        { label: 'Standard ($1,500 - $4,000)', value: '1500_4000' },
+        { label: 'Premium (> $4,000)', value: 'gt_4000' },
+      ],
+    },
+  ],
+};
